@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null && exists(/databases/$(database)/documents/config/access)
+        && request.auth.uid in get(/databases/$(database)/documents/config/access).data.adminUids;
+    }
+    function validTrip(d) {
+      return d.keys().hasOnly(['title','description','startDate','endDate','status','createdAt','updatedAt','deletedAt'])
+        && d.keys().hasAll(['title','description','startDate','endDate','status','createdAt','updatedAt','deletedAt'])
+        && d.title is string && d.title.size() > 0 && d.title.size() <= 120
+        && d.description is string && d.description.size() <= 2000
+        && d.startDate is string && d.startDate.matches('^\\d{4}-\\d{2}-\\d{2}$')
+        && d.endDate is string && d.endDate.matches('^\\d{4}-\\d{2}-\\d{2}$')
+        && d.endDate >= d.startDate
+        && d.status in ['planning','upcoming','active','completed','archived']
+        && d.createdAt is timestamp && d.updatedAt is timestamp
+        && (d.deletedAt == null || d.deletedAt is timestamp);
+    }
+    function validStage(d) {
+      return d.keys().hasOnly(['title','type','startDate','endDate','country','place','address','transport','notes','createdAt','updatedAt','deletedAt'])
+        && d.keys().hasAll(['title','type','startDate','endDate','country','place','address','transport','notes','createdAt','updatedAt','deletedAt'])
+        && d.title is string && d.title.size()>0 && d.title.size()<=120
+        && d.type in ['stay','transit','stop']
+        && d.startDate is string && d.startDate.matches('^\\d{4}-\\d{2}-\\d{2}$')
+        && d.endDate is string && d.endDate.matches('^\\d{4}-\\d{2}-\\d{2}$') && d.endDate >= d.startDate
+        && d.country is string && d.country.size()<=80 && d.place is string && d.place.size()<=120
+        && d.address is string && d.address.size()<=300 && d.transport is string && d.transport.size()<=80
+        && d.notes is string && d.notes.size()<=3000
+        && d.createdAt is timestamp && d.updatedAt is timestamp
+        && (d.deletedAt == null || d.deletedAt is timestamp);
+    }
+    function validAccommodation(d) {
+      return d.keys().hasOnly(['name','stageId','address','city','country','platform','provider','bookingUrl','bookingReference','checkInDate','checkOutDate','checkInTime','checkOutTime','keyInfo','parkingInfo','hostName','hostPhone','hostEmail','totalPriceMinor','currency','cancellationUntil','cancellationPolicy','notes','createdAt','updatedAt','deletedAt'])
+        && d.keys().hasAll(['name','stageId','address','city','country','platform','provider','bookingUrl','bookingReference','checkInDate','checkOutDate','checkInTime','checkOutTime','keyInfo','parkingInfo','hostName','hostPhone','hostEmail','totalPriceMinor','currency','cancellationUntil','cancellationPolicy','notes','createdAt','updatedAt','deletedAt'])
+        && d.name is string && d.name.size()>0 && d.name.size()<=160
+        && d.stageId is string && d.stageId.size()<=100
+        && d.address is string && d.address.size()<=400
+        && d.city is string && d.city.size()<=120 && d.country is string && d.country.size()<=100
+        && d.platform is string && d.platform.size()<=100 && d.provider is string && d.provider.size()<=120
+        && d.bookingUrl is string && d.bookingUrl.size()<=1000 && (d.bookingUrl=='' || d.bookingUrl.matches('^https://.*'))
+        && d.bookingReference is string && d.bookingReference.size()<=150
+        && d.checkInDate is string && d.checkInDate.matches('^\\d{4}-\\d{2}-\\d{2}$')
+        && d.checkOutDate is string && d.checkOutDate.matches('^\\d{4}-\\d{2}-\\d{2}$') && d.checkOutDate > d.checkInDate
+        && d.checkInTime is string && d.checkInTime.size()<=20 && d.checkOutTime is string && d.checkOutTime.size()<=20
+        && d.keyInfo is string && d.keyInfo.size()<=3000 && d.parkingInfo is string && d.parkingInfo.size()<=2000
+        && d.hostName is string && d.hostName.size()<=120 && d.hostPhone is string && d.hostPhone.size()<=100
+        && d.hostEmail is string && d.hostEmail.size()<=250
+        && d.totalPriceMinor is int && d.totalPriceMinor>=0 && d.totalPriceMinor<=1000000000
+        && d.currency is string && d.currency.matches('^[A-Z]{3}$')
+        && d.cancellationUntil is string && d.cancellationUntil.size()<=10
+        && d.cancellationPolicy is string && d.cancellationPolicy.size()<=3000
+        && d.notes is string && d.notes.size()<=3000
+        && d.createdAt is timestamp && d.updatedAt is timestamp
+        && (d.deletedAt == null || d.deletedAt is timestamp);
+    }
+    match /config/{id} {
+      allow read: if id == 'access' && isAdmin();
+      allow write: if false; // config/access ausschließlich über Firebase-Konsole/Admin SDK erstellen
+    }
+    match /trips/{tripId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && validTrip(request.resource.data) && request.resource.data.createdAt==request.time && request.resource.data.updatedAt==request.time && request.resource.data.deletedAt==null;
+      allow update: if isAdmin() && validTrip(request.resource.data) && request.resource.data.createdAt==resource.data.createdAt && request.resource.data.updatedAt==request.time;
+      allow delete: if false;
+      match /stages/{stageId} {
+        allow read: if isAdmin();
+        allow create: if isAdmin() && validStage(request.resource.data) && request.resource.data.createdAt==request.time && request.resource.data.updatedAt==request.time && request.resource.data.deletedAt==null;
+        allow update: if isAdmin() && validStage(request.resource.data) && request.resource.data.createdAt==resource.data.createdAt && request.resource.data.updatedAt==request.time;
+        allow delete: if false;
+      }
+      match /accommodations/{accommodationId} {
+        allow read: if isAdmin();
+        allow create: if isAdmin() && validAccommodation(request.resource.data) && request.resource.data.createdAt==request.time && request.resource.data.updatedAt==request.time && request.resource.data.deletedAt==null;
+        allow update: if isAdmin() && validAccommodation(request.resource.data) && request.resource.data.createdAt==resource.data.createdAt && request.resource.data.updatedAt==request.time;
+        allow delete: if false;
+      }
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}
