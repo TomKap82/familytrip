@@ -1,3 +1,8 @@
-import { defineConfig ({base: '/familytrip/',})} from 'vite';
+
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-export default defineConfig({plugins:[react()],base:process.env.GITHUB_PAGES==='true'?'/familytrip/':'/'});
+
+export default defineConfig({
+  plugins: [react()],
+  base: '/familytrip/',
+});
